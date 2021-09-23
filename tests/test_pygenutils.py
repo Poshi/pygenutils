@@ -340,17 +340,10 @@ class TestNumericRangeSet(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.nrs = NumericRangeSet(0, 100)
+        self.nrs = NumericRangeSet()
 
     def tearDown(self) -> None:
         return super().tearDown()
-
-    def test_add_out_of_bonds(self) -> None:
-        with self.assertRaises(RuntimeError):
-            self.nrs.add(-1, 10)
-
-        with self.assertRaises(RuntimeError):
-            self.nrs.add(90, 101)
 
     def test_add_empty(self) -> None:
         with self.assertRaises(RuntimeError):
@@ -403,7 +396,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(15, 16)
         self.nrs.add(50, 60)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(1, 10)
         nrs2.add(20, 30)
 
@@ -423,7 +416,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(15, 16)
         self.nrs.add(50, 60)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(1, 14)
         nrs2.add(20, 49)
 
@@ -441,7 +434,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(10, 16)
         self.nrs.add(50, 60)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(1, 14)
         nrs2.add(20, 60)
 
@@ -459,7 +452,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(15, 16)
         self.nrs.add(50, 60)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(1, 14)
         nrs2.add(20, 49)
 
@@ -474,7 +467,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(15, 16)
         self.nrs.add(50, 60)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(1, 10)
         nrs2.add(20, 40)
 
@@ -488,7 +481,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_intersection_overlap(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 15)
 
         nrs_result = self.nrs & nrs2
@@ -501,7 +494,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_intersection_subset(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 9)
 
         nrs_result = self.nrs & nrs2
@@ -514,7 +507,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_difference(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 15)
 
         nrs_result = self.nrs - nrs2
@@ -527,7 +520,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_difference_disjoint(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(13, 15)
 
         nrs_result = self.nrs - nrs2
@@ -540,7 +533,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_difference_adjacent(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(11, 15)
 
         nrs_result = self.nrs - nrs2
@@ -553,7 +546,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_difference_subset_edge(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 10)
 
         nrs_result = self.nrs - nrs2
@@ -566,7 +559,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_difference_subset_inner(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 7)
 
         nrs_result = self.nrs - nrs2
@@ -582,7 +575,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_symmetric_difference(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(5, 15)
 
         nrs_result = self.nrs ^ nrs2
@@ -598,7 +591,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_symmetric_difference_disjoint(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(12, 15)
 
         nrs_result = self.nrs ^ nrs2
@@ -614,7 +607,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_symmetric_difference_adjacent(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(11, 15)
 
         nrs_result = self.nrs ^ nrs2
@@ -629,7 +622,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_symmetric_difference_subset_edge(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(7, 10)
 
         nrs_result = self.nrs ^ nrs2
@@ -644,7 +637,7 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_symmetric_difference_subset_inner(self) -> None:
         self.nrs.add(1, 10)
 
-        nrs2 = NumericRangeSet(0, 100)
+        nrs2 = NumericRangeSet()
         nrs2.add(7, 8)
 
         nrs_result = self.nrs ^ nrs2

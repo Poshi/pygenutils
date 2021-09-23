@@ -1,9 +1,9 @@
 '''pygenutils main module'''
 
 import re
-from dataclasses import dataclass
 from functools import reduce, total_ordering
-from typing import Dict, Iterator, Set
+from math import inf
+from typing import Dict, Iterator, Set, Tuple, Union
 
 import pysam
 
@@ -40,7 +40,9 @@ class SequenceDict:
         return r
 
 
-@dataclass(frozen=True)
+NRElement = Union[int, float]
+
+
 @total_ordering
 class NumericRange:
     '''Helper class to represent a integer closed range of numbers.
@@ -64,8 +66,21 @@ class NumericRange:
     instances of NumericRange.
     '''
 
-    start: int
-    end: int
+    def __init__(self, start: NRElement = -inf, end: NRElement = inf) -> None:
+        if (
+            (isinstance(start, float) and start != inf) or
+            (isinstance(end, float) and end != inf)
+        ):
+            raise TypeError("No floats allowed in the range, only infinities")
+
+        self.start = start
+        self.end = end
+
+    def as_tuple(self) -> Tuple[NRElement, NRElement]:
+        return (self.start, self.end)
+
+    def __hash__(self) -> int:
+        return hash(self.as_tuple())
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, self.__class__):
@@ -77,10 +92,10 @@ class NumericRange:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.start != other.start:
+        if self.start == other.start:
+            return self.end < other.end
+        else:
             return self.start < other.start
-
-        return self.end < other.end
 
     def isdisjoint(self, other) -> bool:
         # If not the same class, cannot be compared
@@ -111,9 +126,17 @@ class NumericRange:
         return left.end + 1 == right.start
 
     def issubset(self, other) -> bool:
+        # If not the same class, cannot be compared
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+
         return self.start >= other.start and self.end <= other.end
 
     def issuperset(self, other) -> bool:
+        # If not the same class, cannot be compared
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+
         return self.start <= other.start and self.end >= other.end
 
     def __and__(self, other) -> 'NumericRange':
@@ -121,7 +144,6 @@ class NumericRange:
             return NotImplemented
 
         if self.isdisjoint(other):
-            # TODO: intersection of disjoint ranges should return an empty range, which cannot be represented here
             return NotImplemented
 
         return self.__class__(
@@ -154,13 +176,13 @@ class NumericRange:
             return set()
 
         if other.start <= self.start:
-            return {NumericRange(other.end + 1, self.end)}
+            return {self.__class__(other.end + 1, self.end)}
         elif other.end >= self.end:
-            return {NumericRange(self.start, other.start - 1)}
+            return {self.__class__(self.start, other.start - 1)}
         else:
             return {
-                NumericRange(self.start, other.start - 1),
-                NumericRange(other.end + 1, self.end),
+                self.__class__(self.start, other.start - 1),
+                self.__class__(other.end + 1, self.end),
             }
 
     def __xor__(self, other) -> Set['NumericRange']:
@@ -180,7 +202,10 @@ class NumericRange:
     def __contains__(self, elem: int) -> bool:
         return self.start <= elem and elem <= self.end
 
-    def __len__(self) -> int:
+    def __len__(self) -> NRElement:
+        if self.start == -inf or self.end == inf:
+            return inf
+
         return self.end - self.start + 1
 
     def __str__(self) -> str:
@@ -196,30 +221,14 @@ class NumericRange:
 
 class NumericRangeSet:
 
-    def __init__(self, minimum: int, maximum: int):
-        self.minimum: int = minimum
-        self.maximum: int = maximum
+    def __init__(self):
         self.ranges: Set[NumericRange] = set()
 
-    def add(self, start: int = None, end: int = None) -> 'NumericRangeSet':
-        # Assign default values
-        if start is None:
-            start = self.minimum
-
-        if end is None:
-            end = self.maximum
-
-        # Check values are inside the expected range
-        if start < self.minimum or start >= self.maximum:
-            raise RuntimeError(f'Start of range ({start}) not valid ([{self.minimum}, {self.maximum}])')
-
-        if end < self.minimum or end >= self.maximum:
-            raise RuntimeError(f'End of range ({end}) not valid ([{self.minimum}, {self.maximum}])')
-
-        if start > end:
+    def add(self, start: NRElement = -inf, end: NRElement = inf) -> 'NumericRangeSet':
+        if start is not None and end is not None and start > end:
             raise RuntimeError(f'Start of range ({start}) greater than its end ({end})')
 
-        # NumericRange is valid, so create it
+        # Create the new object
         nr = NumericRange(start, end)
 
         # Extract the set of ranges that must be joined to the new NumericRange
@@ -242,13 +251,7 @@ class NumericRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.minimum != other.minimum or self.maximum != other.maximum:
-            raise ValueError(
-                f'Range boundaries does not match '
-                f'({self.minimum}, {self.maximum})!=({other.minimum}, {other.maximum}). Cannot make union.'
-            )
-
-        result = NumericRangeSet(self.minimum, self.maximum)
+        result = self.__class__()
         for r in self.ranges:
             intersect_ranges = [e for e in other.ranges if not r.isdisjoint(e)]
             result.ranges.update([e & r for e in intersect_ranges])
@@ -259,12 +262,6 @@ class NumericRangeSet:
         # AKA union
         if not isinstance(other, self.__class__):
             return NotImplemented
-
-        if self.minimum != other.minimum or self.maximum != other.maximum:
-            raise ValueError(
-                f'Range boundaries does not match '
-                f'({self.minimum}, {self.maximum})!=({other.minimum}, {other.maximum}). Cannot make union.'
-            )
 
         sorted_ranges = sorted(self.ranges | other.ranges, reverse=True)
         result_list = list()
@@ -280,7 +277,7 @@ class NumericRangeSet:
             else:
                 result_list.append(next_range)
 
-        result = NumericRangeSet(self.minimum, self.maximum)
+        result = self.__class__()
         result.ranges = set(result_list)
 
         return result
@@ -294,13 +291,7 @@ class NumericRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.minimum != other.minimum or self.maximum != other.maximum:
-            raise ValueError(
-                f'Range boundaries does not match '
-                f'({self.minimum}, {self.maximum})!=({other.minimum}, {other.maximum}). Cannot make union.'
-            )
-
-        result = NumericRangeSet(self.minimum, self.maximum)
+        result = self.__class__()
         for r in self.ranges:
             intersect_ranges = [e for e in other.ranges if not r.isdisjoint(e)]
             if not intersect_ranges:
@@ -324,7 +315,7 @@ class NumericRangeSet:
 
     def __repr__(self) -> str:
         nrs = ", ".join([repr(nr) for nr in self.ranges])
-        r = f'NumericRangeSet({self.minimum}, {self.maximum}, [{nrs}])'
+        r = f'NumericRangeSet([{nrs}])'
 
         return r
 
@@ -333,10 +324,10 @@ class GenomicRangeSet:
 
     def __init__(self, sd: SequenceDict):
         self.sd = sd
-        self.ranges: Dict[str, NumericRangeSet] = {k: NumericRangeSet(0, sd[k] - 1) for k in sd}
+        self.ranges: Dict[str, NumericRangeSet] = {k: NumericRangeSet() for k in sd}
         self.string_re = re.compile(r'^(\w+)(:(\d+)?(-(\d+)?)?)?$')
 
-    def add(self, chr: str, start: int = None, end: int = None) -> 'GenomicRangeSet':
+    def add(self, chr: str, start: NRElement = -inf, end: NRElement = inf) -> 'GenomicRangeSet':
         if chr not in self.ranges:
             raise ValueError(f'Chromosome {chr} not found in FastA file')
 
