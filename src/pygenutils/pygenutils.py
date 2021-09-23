@@ -139,17 +139,19 @@ class NumericRange:
 
         return self.start <= other.start and self.end >= other.end
 
-    def __and__(self, other) -> 'NumericRange':
+    def __and__(self, other) -> Set['NumericRange']:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
         if self.isdisjoint(other):
-            return NotImplemented
+            return set()
 
-        return self.__class__(
-            max(self.start, other.start),
-            min(self.end, other.end),
-        )
+        return {
+            self.__class__(
+                max(self.start, other.start),
+                min(self.end, other.end),
+            )
+        }
 
     def __or__(self, other) -> Set['NumericRange']:
         if not isinstance(other, self.__class__):
@@ -254,7 +256,7 @@ class NumericRangeSet:
         result = self.__class__()
         for r in self.ranges:
             intersect_ranges = [e for e in other.ranges if not r.isdisjoint(e)]
-            result.ranges.update([e & r for e in intersect_ranges])
+            result.ranges.update([(e & r).pop() for e in intersect_ranges])
 
         return result
 
@@ -322,10 +324,11 @@ class NumericRangeSet:
 
 class GenomicRangeSet:
 
+    string_re = re.compile(r'^(\w+)(:(\d+)?(-(\d+)?)?)?$')
+
     def __init__(self, sd: SequenceDict):
         self.sd = sd
         self.ranges: Dict[str, NumericRangeSet] = {k: NumericRangeSet() for k in sd}
-        self.string_re = re.compile(r'^(\w+)(:(\d+)?(-(\d+)?)?)?$')
 
     def add(self, chr: str, start: NRElement = -inf, end: NRElement = inf) -> 'GenomicRangeSet':
         if chr not in self.ranges:
