@@ -326,13 +326,12 @@ class GenomicRangeSet:
 
     string_re = re.compile(r'^(\w+)(:(\d+)?(-(\d+)?)?)?$')
 
-    def __init__(self, sd: SequenceDict):
-        self.sd = sd
-        self.ranges: Dict[str, NumericRangeSet] = {k: NumericRangeSet() for k in sd}
+    def __init__(self):
+        self.ranges: Dict[str, NumericRangeSet] = dict()
 
     def add(self, chr: str, start: NRElement = -inf, end: NRElement = inf) -> 'GenomicRangeSet':
         if chr not in self.ranges:
-            raise ValueError(f'Chromosome {chr} not found in FastA file')
+            self.ranges[chr] = NumericRangeSet()
 
         self.ranges[chr].add(start, end)
 
@@ -346,8 +345,8 @@ class GenomicRangeSet:
         match = self.string_re.match(s)
         if match:
             chr, start, end = match.group(1, 3, 5)
-            istart = int(start) - 1 if start is not None else None
-            iend = int(end) - 1 if end is not None else None
+            istart = int(start) - 1 if start is not None else -inf
+            iend = int(end) - 1 if end is not None else inf
 
             self.add(chr, istart, iend)
         else:
@@ -359,11 +358,8 @@ class GenomicRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.ranges.keys() != other.ranges.keys():
-            raise ValueError("Keyset different in ranges, cannot make intersection")
-
-        result = GenomicRangeSet(self.sd)
-        for chr in result.ranges.keys():
+        result = self.__class__()
+        for chr in self.ranges.keys() & other.ranges.keys():
             result.ranges[chr] = self.ranges[chr] & other.ranges[chr]
 
         return result
@@ -372,12 +368,13 @@ class GenomicRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.ranges.keys() != other.ranges.keys():
-            raise ValueError("Keyset different in ranges, cannot make union")
-
-        result = GenomicRangeSet(self.sd)
-        for chr in result.ranges.keys():
+        result = self.__class__()
+        for chr in self.ranges.keys() & other.ranges.keys():
             result.ranges[chr] = self.ranges[chr] | other.ranges[chr]
+        for chr in self.ranges.keys() - result.ranges.keys():
+            result.ranges[chr] = self.ranges[chr]
+        for chr in other.ranges.keys() - result.ranges.keys():
+            result.ranges[chr] = other.ranges[chr]
 
         return result
 
@@ -385,12 +382,11 @@ class GenomicRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.ranges.keys() != other.ranges.keys():
-            raise ValueError("Keyset different in ranges, cannot make union")
-
-        result = GenomicRangeSet(self.sd)
-        for chr in result.ranges.keys():
+        result = self.__class__()
+        for chr in self.ranges.keys() & other.ranges.keys():
             result.ranges[chr] = self.ranges[chr] - other.ranges[chr]
+        for chr in self.ranges.keys() - other.ranges.keys():
+            result.ranges[chr] = self.ranges[chr]
 
         return result
 
@@ -398,12 +394,13 @@ class GenomicRangeSet:
         if not isinstance(other, self.__class__):
             return NotImplemented
 
-        if self.ranges.keys() != other.ranges.keys():
-            raise ValueError("Keyset different in ranges, cannot make union")
-
-        result = GenomicRangeSet(self.sd)
-        for chr in result.ranges.keys():
+        result = self.__class__()
+        for chr in self.ranges.keys() & other.ranges.keys():
             result.ranges[chr] = self.ranges[chr] ^ other.ranges[chr]
+        for chr in self.ranges.keys() - result.ranges.keys():
+            result.ranges[chr] = self.ranges[chr]
+        for chr in other.ranges.keys() - result.ranges.keys():
+            result.ranges[chr] = other.ranges[chr]
 
         return result
 
@@ -423,4 +420,4 @@ if __name__ == '__main__':
     f = 'tests/data/test1.fasta'
     sd = SequenceDict(f)
 
-    grs = GenomicRangeSet(sd)
+    grs = GenomicRangeSet()
