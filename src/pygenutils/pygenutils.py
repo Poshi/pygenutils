@@ -405,12 +405,13 @@ class GenomicRangeSet:
         return result
 
     def __repr__(self) -> str:
-        r = f'GenomicRangeSet({repr(self.ranges)})'
+        r = f'{self.__class__.__name__}({repr(self.ranges)})'
 
         return r
 
     def __str__(self) -> str:
-        r = f'GenomicRangeSet({len(self.ranges)} chromosomes, {sum([len(v) for v in self.ranges.values()])} ranges)'
+        r = f'{self.__class__.__name__}({len(self.ranges)} chromosomes, ' \
+            f'{sum([len(v) for v in self.ranges.values()])} ranges)'
 
         return r
 
