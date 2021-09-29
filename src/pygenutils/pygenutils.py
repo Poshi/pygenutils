@@ -1,6 +1,7 @@
 '''pygenutils main module'''
 
 import re
+from enum import Enum, unique, auto
 from functools import reduce, total_ordering
 from math import inf
 from typing import Dict, Iterator, Set, Tuple, Union
@@ -201,7 +202,7 @@ class NumericRange:
             shared = self & other
             return {(self - shared).pop(), (other - shared).pop()}
 
-    def __contains__(self, elem: int) -> bool:
+    def __contains__(self, elem: NRElement) -> bool:
         return self.start <= elem and elem <= self.end
 
     def __len__(self) -> NRElement:
@@ -304,7 +305,7 @@ class NumericRangeSet:
 
         return result
 
-    def __contains__(self, elem: int) -> bool:
+    def __contains__(self, elem: NRElement) -> bool:
         return any([elem in r for r in self.ranges])
 
     def __len__(self) -> int:
@@ -353,6 +354,17 @@ class GenomicRangeSet:
             raise ValueError(f'Bad formed region string: {s}')
 
         return self
+
+    @classmethod
+    def from_bed_file(cls, bed_file_name: str, separator: str = None) -> 'GenomicRangeSet':
+        result = cls()
+
+        with open(bed_file_name, 'r') as bed_in:
+            for line in bed_in:
+                chr, start, end = line.rstrip().split(separator, maxsplit=3)[0:3]
+                result.add(chr, int(start), int(end) - 1)
+
+        return result
 
     def __and__(self, other) -> 'GenomicRangeSet':
         if not isinstance(other, self.__class__):
@@ -404,6 +416,9 @@ class GenomicRangeSet:
 
         return result
 
+    def __contains__(self, position: Tuple[str, NRElement]) -> bool:
+        return position[0] in self.ranges and position[1] in self.ranges[position[0]]
+
     def __repr__(self) -> str:
         r = f'{self.__class__.__name__}({repr(self.ranges)})'
 
@@ -416,9 +431,76 @@ class GenomicRangeSet:
         return r
 
 
+@unique
+class AlignmentFormat(Enum):
+    AUTO = auto()
+    SAM = auto()
+    BAM = auto()
+    CRAM = auto()
+    UNKNOWN = auto()
+
+
+class BamFilter:
+
+    def __init__(
+        self,
+        grs: GenomicRangeSet,
+        bam_filename: str,
+        format: AlignmentFormat = AlignmentFormat.AUTO,
+        reference: str = None
+    ) -> None:
+        self.grs = grs
+        self.bam_filename = bam_filename
+        self.reference = reference
+
+        if format == AlignmentFormat.AUTO:
+            if self.bam_filename.endswith('sam'):
+                self.format = AlignmentFormat.SAM
+            elif self.bam_filename.endswith('bam'):
+                self.format = AlignmentFormat.BAM
+            elif self.bam_filename.endswith('cram'):
+                self.format = AlignmentFormat.CRAM
+            else:
+                self.format = AlignmentFormat.UNKNOWN
+        else:
+            self.format = format
+
+    def _compute_mode_string(self) -> str:
+        if self.format == AlignmentFormat.SAM:
+            mode = 'r'
+        elif self.format == AlignmentFormat.BAM:
+            mode = 'rb'
+        elif self.format == AlignmentFormat.CRAM:
+            mode = 'rc'
+        else:
+            raise ValueError('Unknown alignment file format')
+
+        return mode
+
+    def __iter__(self) -> pysam.AlignedSegment:  # pylint: disable=maybe-no-member
+        with pysam.AlignmentFile(  # pylint: disable=maybe-no-member
+            self.bam_filename,
+            self._compute_mode_string(),
+            reference_filename=self.reference
+        ) as bam:
+            for aln in bam:
+                if (aln.reference_name, aln.reference_start) in grs:
+                    yield aln
+
+
 if __name__ == '__main__':
     print("Running in main")
     f = 'tests/data/test1.fasta'
     sd = SequenceDict(f)
 
-    grs = GenomicRangeSet()
+    bed = 'tests/data/test.bed'
+    grs = GenomicRangeSet.from_bed_file(bed)
+    print(grs)
+
+    counter = 0
+    bam = 'tests/data/test.bam'
+    bf = BamFilter(grs, bam)
+    for aln in bf:
+        print(str(aln))
+        counter += 1
+    print(counter)
