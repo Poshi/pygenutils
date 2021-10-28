@@ -1,7 +1,8 @@
 '''pygenutils main module'''
 
+import locale
 import re
-from enum import Enum, unique, auto
+from enum import Enum, auto, unique
 from functools import reduce, total_ordering
 from math import inf
 from typing import Dict, Iterator, Set, Tuple, Union
@@ -18,11 +19,11 @@ class SequenceDict:
         with pysam.FastaFile(fasta) as fin:  # pylint: disable=maybe-no-member
             self.sq = dict(zip(fin.references, fin.lengths))
 
-    def __getitem__(self, chr) -> int:
-        return self.sq[chr]
+    def __getitem__(self, chromosome) -> int:
+        return self.sq[chromosome]
 
-    def __contains__(self, chr) -> bool:
-        return chr in self.sq
+    def __contains__(self, chromosome) -> bool:
+        return chromosome in self.sq
 
     def __iter__(self) -> Iterator:
         return iter(self.sq)
@@ -31,14 +32,10 @@ class SequenceDict:
         return len(self.sq)
 
     def __repr__(self) -> str:
-        r = f"{self.__class__}({self.fasta})"
-
-        return r
+        return f"{self.__class__}({self.fasta})"
 
     def __str__(self) -> str:
-        r = f"SequenceDict({self.fasta})"
-
-        return r
+        return f"SequenceDict({self.fasta})"
 
 
 NRElement = Union[int, float]
@@ -212,14 +209,10 @@ class NumericRange:
         return self.end - self.start + 1
 
     def __str__(self) -> str:
-        r = f"[{self.start}, {self.end}]"
-
-        return r
+        return f"[{self.start}, {self.end}]"
 
     def __repr__(self) -> str:
-        r = f"{self.__class__}({self.start}, {self.end})"
-
-        return r
+        return f"{self.__class__}({self.start}, {self.end})"
 
 
 class NumericRangeSet:
@@ -312,15 +305,11 @@ class NumericRangeSet:
         return len(self.ranges)
 
     def __str__(self) -> str:
-        r = f'NumericRangeSet({len(self.ranges)} ranges)'
-
-        return r
+        return f'NumericRangeSet({len(self.ranges)} ranges)'
 
     def __repr__(self) -> str:
         nrs = ", ".join([repr(nr) for nr in self.ranges])
-        r = f'NumericRangeSet([{nrs}])'
-
-        return r
+        return f'NumericRangeSet([{nrs}])'
 
 
 class GenomicRangeSet:
@@ -330,26 +319,32 @@ class GenomicRangeSet:
     def __init__(self):
         self.ranges: Dict[str, NumericRangeSet] = dict()
 
-    def add(self, chr: str, start: NRElement = -inf, end: NRElement = inf) -> 'GenomicRangeSet':
-        if chr not in self.ranges:
-            self.ranges[chr] = NumericRangeSet()
+    def add(
+        self,
+        chromosome: str,
+        start: NRElement = -inf,
+        end: NRElement = inf
+    ) -> 'GenomicRangeSet':
+        if chromosome not in self.ranges:
+            self.ranges[chromosome] = NumericRangeSet()
 
-        self.ranges[chr].add(start, end)
+        self.ranges[chromosome].add(start, end)
 
         return self
 
     def add_from_string(self, s: str) -> 'GenomicRangeSet':
         '''Add interval from string.
 
-        Parses the string and interprets it in the same way as samtools: one based index with both ends included.
+        Parses the string and interprets it in the same way as samtools:
+        one based index with both ends included.
         '''
         match = self.string_re.match(s)
         if match:
-            chr, start, end = match.group(1, 3, 5)
+            chromosome, start, end = match.group(1, 3, 5)
             istart = int(start) - 1 if start is not None else -inf
             iend = int(end) - 1 if end is not None else inf
 
-            self.add(chr, istart, iend)
+            self.add(chromosome, istart, iend)
         else:
             raise ValueError(f'Bad formed region string: {s}')
 
@@ -359,10 +354,11 @@ class GenomicRangeSet:
     def from_bed_file(cls, bed_file_name: str, separator: str = None) -> 'GenomicRangeSet':
         result = cls()
 
-        with open(bed_file_name, 'r') as bed_in:
+        locale_encoding = locale.getpreferredencoding(False)
+        with open(bed_file_name, 'r', encoding=locale_encoding) as bed_in:
             for line in bed_in:
-                chr, start, end = line.rstrip().split(separator, maxsplit=3)[0:3]
-                result.add(chr, int(start), int(end) - 1)
+                chromosome, start, end = line.rstrip().split(separator, maxsplit=3)[0:3]
+                result.add(chromosome, int(start), int(end) - 1)
 
         return result
 
@@ -371,8 +367,8 @@ class GenomicRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for chr in self.ranges.keys() & other.ranges.keys():
-            result.ranges[chr] = self.ranges[chr] & other.ranges[chr]
+        for chromosome in self.ranges.keys() & other.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome] & other.ranges[chromosome]
 
         return result
 
@@ -381,12 +377,12 @@ class GenomicRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for chr in self.ranges.keys() & other.ranges.keys():
-            result.ranges[chr] = self.ranges[chr] | other.ranges[chr]
-        for chr in self.ranges.keys() - result.ranges.keys():
-            result.ranges[chr] = self.ranges[chr]
-        for chr in other.ranges.keys() - result.ranges.keys():
-            result.ranges[chr] = other.ranges[chr]
+        for chromosome in self.ranges.keys() & other.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome] | other.ranges[chromosome]
+        for chromosome in self.ranges.keys() - result.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome]
+        for chromosome in other.ranges.keys() - result.ranges.keys():
+            result.ranges[chromosome] = other.ranges[chromosome]
 
         return result
 
@@ -395,10 +391,10 @@ class GenomicRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for chr in self.ranges.keys() & other.ranges.keys():
-            result.ranges[chr] = self.ranges[chr] - other.ranges[chr]
-        for chr in self.ranges.keys() - other.ranges.keys():
-            result.ranges[chr] = self.ranges[chr]
+        for chromosome in self.ranges.keys() & other.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome] - other.ranges[chromosome]
+        for chromosome in self.ranges.keys() - other.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome]
 
         return result
 
@@ -407,12 +403,12 @@ class GenomicRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for chr in self.ranges.keys() & other.ranges.keys():
-            result.ranges[chr] = self.ranges[chr] ^ other.ranges[chr]
-        for chr in self.ranges.keys() - result.ranges.keys():
-            result.ranges[chr] = self.ranges[chr]
-        for chr in other.ranges.keys() - result.ranges.keys():
-            result.ranges[chr] = other.ranges[chr]
+        for chromosome in self.ranges.keys() & other.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome] ^ other.ranges[chromosome]
+        for chromosome in self.ranges.keys() - result.ranges.keys():
+            result.ranges[chromosome] = self.ranges[chromosome]
+        for chromosome in other.ranges.keys() - result.ranges.keys():
+            result.ranges[chromosome] = other.ranges[chromosome]
 
         return result
 
@@ -420,15 +416,11 @@ class GenomicRangeSet:
         return position[0] in self.ranges and position[1] in self.ranges[position[0]]
 
     def __repr__(self) -> str:
-        r = f'{self.__class__.__name__}({repr(self.ranges)})'
-
-        return r
+        return f'{self.__class__.__name__}({repr(self.ranges)})'
 
     def __str__(self) -> str:
-        r = f'{self.__class__.__name__}({len(self.ranges)} chromosomes, ' \
-            f'{sum([len(v) for v in self.ranges.values()])} ranges)'
-
-        return r
+        return f'{self.__class__.__name__}({len(self.ranges)} chromosomes, ' \
+               f'{sum([len(v) for v in self.ranges.values()])} ranges)'
 
 
 @unique
@@ -446,14 +438,14 @@ class BamFilter:
         self,
         grs: GenomicRangeSet,
         bam_filename: str,
-        format: AlignmentFormat = AlignmentFormat.AUTO,
+        alignment_format: AlignmentFormat = AlignmentFormat.AUTO,
         reference: str = None
     ) -> None:
         self.grs = grs
         self.bam_filename = bam_filename
         self.reference = reference
 
-        if format == AlignmentFormat.AUTO:
+        if alignment_format == AlignmentFormat.AUTO:
             if self.bam_filename.endswith('sam'):
                 self.format = AlignmentFormat.SAM
             elif self.bam_filename.endswith('bam'):
@@ -463,7 +455,7 @@ class BamFilter:
             else:
                 self.format = AlignmentFormat.UNKNOWN
         else:
-            self.format = format
+            self.format = alignment_format
 
     def _compute_mode_string(self) -> str:
         if self.format == AlignmentFormat.SAM:
@@ -482,10 +474,10 @@ class BamFilter:
             self.bam_filename,
             self._compute_mode_string(),
             reference_filename=self.reference
-        ) as bam:
-            for aln in bam:
-                if (aln.reference_name, aln.reference_start) in grs:
-                    yield aln
+        ) as bam_file:
+            for alignment in bam_file:
+                if (alignment.reference_name, alignment.reference_start) in self.grs:
+                    yield alignment
 
 
 if __name__ == '__main__':
