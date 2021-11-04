@@ -5,37 +5,85 @@ import re
 from enum import Enum, auto, unique
 from functools import reduce, total_ordering
 from math import inf
-from typing import Dict, Iterator, Set, Tuple, Union
+from typing import Dict, Iterator, Literal, Optional, Set, Tuple, Union
 
-import pysam
+from pysam import AlignedSegment, AlignmentFile, FastaFile, VariantFile  # pylint: disable=no-name-in-module
 
 
 class SequenceDict:
+    '''Dictionary of sequences and their lengths.
 
-    def __init__(self, fasta: str):
-        self.fasta = fasta
-        self.sq: Dict[str, int] = dict()
+    Represents a list of the names of the sequences and their associated
+    lengths, so the ranges choosen can be validated.
+    '''
+    def __init__(self):
+        self.seq_dict: Dict[str, int] = {}
 
-        with pysam.FastaFile(fasta) as fin:  # pylint: disable=maybe-no-member
-            self.sq = dict(zip(fin.references, fin.lengths))
+    @classmethod
+    def from_fasta(cls, fasta: str) -> 'SequenceDict':
+        '''Create a SequenceDict from a FastA file'''
+        result = cls()
+
+        with FastaFile(fasta) as fin:
+            result.seq_dict = dict(zip(fin.references, fin.lengths))
+
+        return result
+
+    @classmethod
+    def from_bam(cls, bam: Union[str, AlignmentFile]) -> 'SequenceDict':
+        '''Create a SequenceDict from a BAM file.
+
+        The input can be either a string with the file name of a SAM or BAM file
+        or an already opened AlignmentFile.
+        '''
+        result = cls()
+
+        if isinstance(bam, AlignmentFile):
+            sq_dict = bam.header['SQ']
+        else:
+            with AlignmentFile(bam) as fin:
+                sq_dict = fin.header['SQ']
+
+        result.seq_dict = {e['SN']: e['LN'] for e in sq_dict}
+
+        return result
+
+    @classmethod
+    def from_bcf(cls, bcf: Union[str, VariantFile]) -> 'SequenceDict':
+        '''Create a SequenceDict from a BCF file.
+
+        The input can be either a string with the file name of a VCF or BCF file
+        or an already opened VariantFile.
+        '''
+        result = cls()
+
+        if isinstance(bcf, VariantFile):
+            contigs = bcf.header.contigs
+        else:
+            with AlignmentFile(bcf) as fin:
+                contigs = fin.header.contigs
+
+        result.seq_dict = {e.name: e.length for e in contigs.values()}
+
+        return result
 
     def __getitem__(self, chromosome) -> int:
-        return self.sq[chromosome]
+        return self.seq_dict[chromosome]
 
     def __contains__(self, chromosome) -> bool:
-        return chromosome in self.sq
+        return chromosome in self.seq_dict
 
-    def __iter__(self) -> Iterator:
-        return iter(self.sq)
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.seq_dict)
 
     def __len__(self) -> int:
-        return len(self.sq)
+        return len(self.seq_dict)
 
     def __repr__(self) -> str:
-        return f"{self.__class__}({self.fasta})"
+        return f"{self.__class__}({len(self.seq_dict)} sequences)"
 
     def __str__(self) -> str:
-        return f"SequenceDict({self.fasta})"
+        return f"{self.__class__}({len(self.seq_dict)} sequences)"
 
 
 NRElement = Union[int, float]
@@ -75,6 +123,7 @@ class NumericRange:
         self.end = end
 
     def as_tuple(self) -> Tuple[NRElement, NRElement]:
+        '''Get the start and end elements in tuple format.'''
         return (self.start, self.end)
 
     def __hash__(self) -> int:
@@ -96,6 +145,11 @@ class NumericRange:
             return self.start < other.start
 
     def isdisjoint(self, other) -> bool:
+        '''Are the two intervals disjoint?
+
+        Two intervals are disjoint when they share no positions. They can still
+        be adjacent or not.
+        '''
         # If not the same class, cannot be compared
         if not isinstance(other, self.__class__):
             return NotImplemented
@@ -110,6 +164,11 @@ class NumericRange:
         return left.end < right.start
 
     def isadjacent(self, other) -> bool:
+        '''Are the two intervals adjacent?
+
+        Adjacent intervals are two intervals where the start position of one
+        of them is innmediately after the end position of the other interval.
+        '''
         # If not the same class, cannot be compared
         if not isinstance(other, self.__class__):
             return NotImplemented
@@ -124,6 +183,7 @@ class NumericRange:
         return left.end + 1 == right.start
 
     def issubset(self, other) -> bool:
+        '''Is one interval a subset of the other?'''
         # If not the same class, cannot be compared
         if not isinstance(other, self.__class__):
             return NotImplemented
@@ -131,6 +191,7 @@ class NumericRange:
         return self.start >= other.start and self.end <= other.end
 
     def issuperset(self, other) -> bool:
+        '''Is one interval a superset of the other?'''
         # If not the same class, cannot be compared
         if not isinstance(other, self.__class__):
             return NotImplemented
@@ -191,13 +252,18 @@ class NumericRange:
 
         if self.isadjacent(other):
             return self | other
-        elif self.isdisjoint(other):
+
+        if self.isdisjoint(other):
             return {self, other}
-        elif self == other:
+
+        if self == other:
             return set()
-        else:
-            shared = self & other
-            return {(self - shared).pop(), (other - shared).pop()}
+
+        # At this point we know that both intervals are overlapped, so the
+        # shared region is a single one, and we can pop it.
+        shared = (self & other).pop()
+
+        return {(self - shared).pop(), (other - shared).pop()}
 
     def __contains__(self, elem: NRElement) -> bool:
         return self.start <= elem and elem <= self.end
@@ -216,26 +282,34 @@ class NumericRange:
 
 
 class NumericRangeSet:
+    '''Represent a simple set of numeric intervals.
+
+    This class allows us to perform set operations and existence testing on a
+    set of numeric intervals, without any information about chromosomes.
+    '''
 
     def __init__(self):
         self.ranges: Set[NumericRange] = set()
 
     def add(self, start: NRElement = -inf, end: NRElement = inf) -> 'NumericRangeSet':
+        '''Add interval from its components'''
         if start is not None and end is not None and start > end:
             raise RuntimeError(f'Start of range ({start}) greater than its end ({end})')
 
         # Create the new object
-        nr = NumericRange(start, end)
+        n_range = NumericRange(start, end)
 
         # Extract the set of ranges that must be joined to the new NumericRange
-        non_disjoint_ranges = {r for r in self.ranges if not r.isdisjoint(nr) or r.isadjacent(nr)}
+        non_disjoint_ranges = {
+            r for r in self.ranges if not r.isdisjoint(n_range) or r.isadjacent(n_range)
+        }
 
         # Generate the new joined range and add it to the ranges
-        def union_single_range(a: NumericRange, b: NumericRange) -> NumericRange:
+        def union_single_range(nr1: NumericRange, nr2: NumericRange) -> NumericRange:
             # We know for sure that the union will return a single item, so we
             # can just pop it from the set and return it for further processing.
-            return (a | b).pop()
-        self.ranges.add(reduce(union_single_range, non_disjoint_ranges, nr))
+            return (nr1 | nr2).pop()
+        self.ranges.add(reduce(union_single_range, non_disjoint_ranges, n_range))
 
         # Remove the old ranges
         self.ranges -= non_disjoint_ranges
@@ -248,9 +322,9 @@ class NumericRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for r in self.ranges:
-            intersect_ranges = [e for e in other.ranges if not r.isdisjoint(e)]
-            result.ranges.update([(e & r).pop() for e in intersect_ranges])
+        for rng in self.ranges:
+            intersect_ranges = [e for e in other.ranges if not rng.isdisjoint(e)]
+            result.ranges.update([(e & rng).pop() for e in intersect_ranges])
 
         return result
 
@@ -260,7 +334,7 @@ class NumericRangeSet:
             return NotImplemented
 
         sorted_ranges = sorted(self.ranges | other.ranges, reverse=True)
-        result_list = list()
+        result_list = []
 
         if sorted_ranges:
             result_list.append(sorted_ranges.pop())
@@ -288,18 +362,21 @@ class NumericRangeSet:
             return NotImplemented
 
         result = self.__class__()
-        for r in self.ranges:
-            intersect_ranges = [e for e in other.ranges if not r.isdisjoint(e)]
+        for rng in self.ranges:
+            intersect_ranges = [e for e in other.ranges if not rng.isdisjoint(e)]
             if not intersect_ranges:
-                result.ranges.add(r)
+                result.ranges.add(rng)
             else:
-                for e in intersect_ranges:
-                    result.ranges.update(r - e)
+                for elem in intersect_ranges:
+                    result.ranges.update(rng - elem)
 
         return result
 
     def __contains__(self, elem: NRElement) -> bool:
-        return any([elem in r for r in self.ranges])
+        return any(elem in r for r in self.ranges)
+
+    def __iter__(self) -> Iterator[NumericRange]:
+        return iter(self.ranges)
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -313,11 +390,54 @@ class NumericRangeSet:
 
 
 class GenomicRangeSet:
+    '''Represents a fully operational set of intervals over a set of chromosomes.
+
+    This class allows us to keep a list of chromosomes, each of the associated
+    to a list of intervals. And be able to perform the whole set of set
+    operations on them, together with existence testing.
+    '''
 
     string_re = re.compile(r'^(\w+)(:(\d+)?(-(\d+)?)?)?$')
 
-    def __init__(self):
-        self.ranges: Dict[str, NumericRangeSet] = dict()
+    def __init__(self, sequence_dict: SequenceDict = None):
+        self.ranges: Dict[str, NumericRangeSet] = {}
+        self.add_sequence_dict(sequence_dict)
+
+    @staticmethod
+    def _range_valid(
+            sequence_dict: Optional[SequenceDict],
+            chromosome: str,
+            start: NRElement,
+            end: NRElement
+    ) -> None:
+        '''Validate if a given range is inside the given SequenceDict.
+
+        In case of an invalid range found, throw a ValueError exception,
+        otherwise no operation is performed.
+        If sequence_dict is None, all ranges are accepted
+        '''
+
+        if sequence_dict is not None:
+            if chromosome not in sequence_dict:
+                raise ValueError(f'Chromosome {chromosome} not found in the reference')
+            if start != -inf and start < 0:
+                raise ValueError(f'Start position below zero: {start}')
+            if end != inf and end > sequence_dict[chromosome] - 1:
+                raise ValueError(f'End position after end of reference: '
+                                 f'{end + 1} > {sequence_dict[chromosome]}')
+
+    def add_sequence_dict(self, sequence_dict: Optional[SequenceDict]) -> 'GenomicRangeSet':
+        '''Add optional SequenceDict for validation of ranges.'''
+        if sequence_dict is not None:
+            # Validate current ranges, exception thrown if invalid
+            for chromosome, nrs in self.ranges.items():
+                for nrange in nrs:
+                    self._range_valid(sequence_dict, chromosome, nrange.start, nrange.end)
+
+        # Assign whatever we passed
+        self.sequence_dict = sequence_dict
+
+        return self
 
     def add(
         self,
@@ -325,6 +445,11 @@ class GenomicRangeSet:
         start: NRElement = -inf,
         end: NRElement = inf
     ) -> 'GenomicRangeSet':
+        '''Add interval from their components.'''
+        # Validate data, exception thrown if invalid
+        self._range_valid(self.sequence_dict, chromosome, start, end)
+
+        # Data is OK, add the range
         if chromosome not in self.ranges:
             self.ranges[chromosome] = NumericRangeSet()
 
@@ -332,13 +457,13 @@ class GenomicRangeSet:
 
         return self
 
-    def add_from_string(self, s: str) -> 'GenomicRangeSet':
+    def add_from_string(self, s_range: str) -> 'GenomicRangeSet':
         '''Add interval from string.
 
         Parses the string and interprets it in the same way as samtools:
         one based index with both ends included.
         '''
-        match = self.string_re.match(s)
+        match = self.string_re.match(s_range)
         if match:
             chromosome, start, end = match.group(1, 3, 5)
             istart = int(start) - 1 if start is not None else -inf
@@ -346,12 +471,13 @@ class GenomicRangeSet:
 
             self.add(chromosome, istart, iend)
         else:
-            raise ValueError(f'Bad formed region string: {s}')
+            raise ValueError(f'Bad formed region string: {s_range}')
 
         return self
 
     @classmethod
     def from_bed_file(cls, bed_file_name: str, separator: str = None) -> 'GenomicRangeSet':
+        '''Create a GenomicRangeSet that represents a BED file.'''
         result = cls()
 
         locale_encoding = locale.getpreferredencoding(False)
@@ -415,6 +541,9 @@ class GenomicRangeSet:
     def __contains__(self, position: Tuple[str, NRElement]) -> bool:
         return position[0] in self.ranges and position[1] in self.ranges[position[0]]
 
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.ranges)
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({repr(self.ranges)})'
 
@@ -425,74 +554,122 @@ class GenomicRangeSet:
 
 @unique
 class AlignmentFormat(Enum):
+    '''Alignment file format identifiers.'''
     AUTO = auto()
     SAM = auto()
     BAM = auto()
     CRAM = auto()
     UNKNOWN = auto()
 
+    @classmethod
+    def guess_format(cls, filename, default=UNKNOWN) -> 'AlignmentFormat':
+        '''Given a filename, guess in which format it is stored.'''
+        if filename.endswith('.sam'):
+            guessed = cls.SAM
+        elif filename.endswith('.bam'):
+            guessed = cls.BAM
+        elif filename.endswith('.cram'):
+            guessed = cls.CRAM
+        else:
+            guessed = default
+
+        return guessed
+
+    @classmethod
+    def guess_mode_string(
+            cls,
+            filename: str,
+            read_write: Literal['r', 'w'],
+            default=UNKNOWN
+    ) -> str:
+        '''Utility method to compute the open file mode.'''
+        file_format = cls.guess_format(filename, default)
+
+        if file_format == cls.SAM:
+            mode = ''
+        elif file_format == cls.BAM:
+            mode = 'b'
+        elif file_format == cls.CRAM:
+            mode = 'c'
+        else:
+            raise ValueError('Unknown alignment file format')
+
+        return f'{read_write}{mode}'
+
+
+@unique
+class VariantFormat(Enum):
+    '''Alignment file format identifiers.'''
+    AUTO = auto()
+    VCF = auto()
+    BCF = auto()
+    UNKNOWN = auto()
+
+    @classmethod
+    def guess_format(cls, filename, default=UNKNOWN) -> 'VariantFormat':
+        '''Given a filename, guess in which format it is stored.'''
+        if filename.endswith('.vcf'):
+            guessed = cls.VCF
+        elif filename.endswith('.vcf.gz'):
+            guessed = cls.VCF
+        elif filename.endswith('.bcf'):
+            guessed = cls.BCF
+        else:
+            guessed = default
+
+        return guessed
+
+    @classmethod
+    def guess_mode_string(
+            cls,
+            filename: str,
+            read_write: Literal['r', 'w'],
+            default=UNKNOWN
+    ) -> str:
+        '''Utility method to compute the open file mode.'''
+        file_format = cls.guess_format(filename, default)
+
+        if file_format == cls.VCF:
+            mode = ''
+        elif file_format == cls.BCF:
+            mode = 'b'
+        else:
+            raise ValueError('Unknown variant file format')
+
+        return f'{read_write}{mode}'
+
 
 class BamFilter:
+    '''Filter BAM records according their alignment positions.'''
 
     def __init__(
         self,
         grs: GenomicRangeSet,
-        bam_filename: str,
-        alignment_format: AlignmentFormat = AlignmentFormat.AUTO,
-        reference: str = None
+        bam_file: AlignmentFile,
     ) -> None:
         self.grs = grs
-        self.bam_filename = bam_filename
-        self.reference = reference
+        self.bam_file = bam_file
 
-        if alignment_format == AlignmentFormat.AUTO:
-            if self.bam_filename.endswith('sam'):
-                self.format = AlignmentFormat.SAM
-            elif self.bam_filename.endswith('bam'):
-                self.format = AlignmentFormat.BAM
-            elif self.bam_filename.endswith('cram'):
-                self.format = AlignmentFormat.CRAM
-            else:
-                self.format = AlignmentFormat.UNKNOWN
-        else:
-            self.format = alignment_format
-
-    def _compute_mode_string(self) -> str:
-        if self.format == AlignmentFormat.SAM:
-            mode = 'r'
-        elif self.format == AlignmentFormat.BAM:
-            mode = 'rb'
-        elif self.format == AlignmentFormat.CRAM:
-            mode = 'rc'
-        else:
-            raise ValueError('Unknown alignment file format')
-
-        return mode
-
-    def __iter__(self) -> pysam.AlignedSegment:  # pylint: disable=maybe-no-member
-        with pysam.AlignmentFile(  # pylint: disable=maybe-no-member
-            self.bam_filename,
-            self._compute_mode_string(),
-            reference_filename=self.reference
-        ) as bam_file:
-            for alignment in bam_file:
-                if (alignment.reference_name, alignment.reference_start) in self.grs:
-                    yield alignment
+    def __iter__(self) -> AlignedSegment:
+        for alignment in self.bam_file:
+            # Reference start is 0-based leftmost coordinate
+            if (alignment.reference_name, alignment.reference_start) in self.grs:
+                yield alignment
 
 
-if __name__ == '__main__':
-    print("Running in main")
-    f = 'tests/data/test1.fasta'
-    sd = SequenceDict(f)
+class BcfFilter:
+    '''Filter BCF records according their positions.'''
 
-    bed = 'tests/data/test.bed'
-    grs = GenomicRangeSet.from_bed_file(bed)
-    print(grs)
+    def __init__(
+        self,
+        grs: GenomicRangeSet,
+        bcf_file: VariantFile,
+    ) -> None:
+        self.grs = grs
+        self.bcf_file = bcf_file
 
-    counter = 0
-    bam = 'tests/data/test.bam'
-    bf = BamFilter(grs, bam)
-    for aln in bf:
-        print(str(aln))
-        counter += 1
-    print(counter)
+    def __iter__(self) -> AlignedSegment:
+        for variant in self.bcf_file:
+            # Position in variant files is 1-based and inclusive
+            if (variant.chrom, variant.pos - 1) in self.grs:
+                yield variant
