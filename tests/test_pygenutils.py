@@ -1,15 +1,9 @@
-from pygenutils import NumericRange, NumericRangeSet
-
 import unittest
+
+from pygenutils import NumericRange, NumericRangeSet
 
 
 class TestNumericRange(unittest.TestCase):
-
-    def setUp(self) -> None:
-        return super().setUp()
-
-    def tearDown(self) -> None:
-        return super().tearDown()
 
     def test_equal(self) -> None:
         nr1 = NumericRange(1, 10)
@@ -47,14 +41,14 @@ class TestNumericRange(unittest.TestCase):
         nr2 = NumericRange(5, 15)
         nr = nr1 & nr2
 
-        self.assertEqual(nr, NumericRange(5, 10))
+        self.assertEqual(nr, {NumericRange(5, 10)})
 
     def test_intersection_edge(self) -> None:
         nr1 = NumericRange(1, 10)
         nr2 = NumericRange(10, 15)
         nr = nr1 & nr2
 
-        self.assertEqual(nr, NumericRange(10, 10))
+        self.assertEqual(nr, {NumericRange(10, 10)})
 
     def test_union(self) -> None:
         nr1 = NumericRange(1, 10)
@@ -328,12 +322,12 @@ class TestNumericRange(unittest.TestCase):
     def test_len(self) -> None:
         nr1 = NumericRange(1, 10)
 
-        self.assertEquals(10, len(nr1))
+        self.assertEqual(10, len(nr1))
 
     def test_len_minimum(self) -> None:
         nr1 = NumericRange(1, 1)
 
-        self.assertEquals(1, len(nr1))
+        self.assertEqual(1, len(nr1))
 
 
 class TestNumericRangeSet(unittest.TestCase):
@@ -342,9 +336,6 @@ class TestNumericRangeSet(unittest.TestCase):
         super().setUp()
         self.nrs = NumericRangeSet()
 
-    def tearDown(self) -> None:
-        return super().tearDown()
-
     def test_add_empty(self) -> None:
         with self.assertRaises(RuntimeError):
             self.nrs.add(10, 9)
@@ -352,13 +343,13 @@ class TestNumericRangeSet(unittest.TestCase):
     def test_add(self) -> None:
         self.nrs.add(1, 10)
 
-        self.assertEquals(self.nrs.ranges, {NumericRange(1, 10)})
+        self.assertEqual(self.nrs.ranges, {NumericRange(1, 10)})
 
     def test_add_multiple_disjoint(self) -> None:
         self.nrs.add(1, 10)
         self.nrs.add(20, 30)
 
-        self.assertEquals(
+        self.assertEqual(
             self.nrs.ranges,
             {NumericRange(1, 10), NumericRange(20, 30)}
         )
@@ -367,7 +358,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(1, 10)
         self.nrs.add(11, 30)
 
-        self.assertEquals(
+        self.assertEqual(
             self.nrs.ranges,
             {NumericRange(1, 30)}
         )
@@ -376,7 +367,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(1, 10)
         self.nrs.add(5, 30)
 
-        self.assertEquals(
+        self.assertEqual(
             self.nrs.ranges,
             {NumericRange(1, 30)}
         )
@@ -387,7 +378,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.nrs.add(25, 30)
         self.nrs.add(1, 30)
 
-        self.assertEquals(
+        self.assertEqual(
             self.nrs.ranges,
             {NumericRange(1, 30)}
         )
@@ -402,7 +393,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs | nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 10),
@@ -422,7 +413,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs | nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 16),
@@ -440,7 +431,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs | nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 16),
@@ -458,7 +449,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs & nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             set()
         )
@@ -473,7 +464,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs & nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             set()
         )
@@ -486,7 +477,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs & nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(5, 10)}
         )
@@ -499,7 +490,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs & nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(5, 9)}
         )
@@ -512,7 +503,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs - nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(1, 4)}
         )
@@ -525,7 +516,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs - nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(1, 10)}
         )
@@ -538,7 +529,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs - nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(1, 10)}
         )
@@ -551,7 +542,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs - nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {NumericRange(1, 4)}
         )
@@ -564,7 +555,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs - nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 4),
@@ -580,7 +571,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs ^ nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 4),
@@ -596,7 +587,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs ^ nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 10),
@@ -612,7 +603,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs ^ nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 15),
@@ -627,7 +618,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs ^ nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 6),
@@ -642,7 +633,7 @@ class TestNumericRangeSet(unittest.TestCase):
 
         nrs_result = self.nrs ^ nrs2
 
-        self.assertEquals(
+        self.assertEqual(
             nrs_result.ranges,
             {
                 NumericRange(1, 6),
