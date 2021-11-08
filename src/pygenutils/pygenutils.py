@@ -278,7 +278,7 @@ class NumericRange:
         return f"[{self.start}, {self.end}]"
 
     def __repr__(self) -> str:
-        return f"{self.__class__}({self.start}, {self.end})"
+        return f"{self.__class__.__name__}({self.start}, {self.end})"
 
 
 class NumericRangeSet:
@@ -382,11 +382,11 @@ class NumericRangeSet:
         return len(self.ranges)
 
     def __str__(self) -> str:
-        return f'NumericRangeSet({len(self.ranges)} ranges)'
+        return f'{self.__class__.__name__}({len(self.ranges)} ranges)'
 
     def __repr__(self) -> str:
         nrs = ", ".join([repr(nr) for nr in self.ranges])
-        return f'NumericRangeSet([{nrs}])'
+        return f'{self.__class__.__name__}([{nrs}])'
 
 
 class GenomicRangeSet:
@@ -487,6 +487,42 @@ class GenomicRangeSet:
                 result.add(chromosome, int(start), int(end) - 1)
 
         return result
+
+    def to_samtools_expression(self) -> str:
+        '''Generate a string that contains a valid expression for filtering on a
+        samtools view command.'''
+        ranges_list = []
+        for chromosome, nrs in self.ranges.items():
+            for nrange in nrs:
+                # BAM POS field is 1-based, so we have to add one to our numbers
+                ranges_list.append(
+                    f'(rname=~"{chromosome}" && pos>={nrange.start + 1} && pos<={nrange.end + 1})'
+                )
+
+        return ' || '.join(ranges_list)
+
+    def to_bcftools_expression(self) -> str:
+        '''Generate a string that contains a valid expression for filtering on a
+        bcftools view command.'''
+        ranges_list = []
+        for chromosome, nrs in self.ranges.items():
+            for nrange in nrs:
+                # BCF POS field is 1-based, so we have to add one to our numbers
+                ranges_list.append(
+                    f'(CHROM=="{chromosome}" && POS>={nrange.start + 1} && POS<={nrange.end + 1})'
+                )
+
+        return ' || '.join(ranges_list)
+
+    def to_regions(self) -> str:
+        '''Generate a string that contains a valid range specification for the
+        region parameter of samtools view and bcftools view.'''
+        ranges_list = []
+        for chromosome, nrs in self.ranges.items():
+            for nrange in nrs:
+                ranges_list.append(f'{chromosome}:{nrange.start + 1}-{nrange.end + 1}')
+
+        return ' '.join(ranges_list)
 
     def __and__(self, other) -> 'GenomicRangeSet':
         if not isinstance(other, self.__class__):
