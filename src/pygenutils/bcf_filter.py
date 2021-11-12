@@ -11,8 +11,8 @@ import sys
 from contextlib import ExitStack
 
 from pysam import VariantFile  # pylint: disable=no-name-in-module
-from pygenutils import (VariantFormat, BcfFilter, GenomicRangeSet,
-                        SequenceDict)
+
+from pygenutils import BcfFilter, GenomicRangeSet, SequenceDict, VariantFormat
 
 
 def process_clp() -> argparse.Namespace:
@@ -46,7 +46,8 @@ def process_clp() -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main():
+    """Main bcf_filter method"""
     args = process_clp()
 
     # Check input parameters validity
@@ -65,10 +66,10 @@ if __name__ == '__main__':
         )
 
         # Extract sequence dictionary for validation of the ranges
-        sd = SequenceDict.from_bcf(input_bcf)
+        sequence_dict = SequenceDict.from_bcf(input_bcf)
 
         # Load genomic ranges
-        grs = GenomicRangeSet(sequence_dict=sd)
+        grs = GenomicRangeSet(sequence_dict=sequence_dict)
         for bed in args.bed:
             grs |= GenomicRangeSet.from_bed_file(bed)
         for rng in args.range:
@@ -87,3 +88,7 @@ if __name__ == '__main__':
         bcf_filter = BcfFilter(grs, input_bcf)
         for variant in bcf_filter:
             output_bcf.write(variant)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
