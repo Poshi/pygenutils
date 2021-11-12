@@ -7,7 +7,8 @@ from functools import reduce, total_ordering
 from math import inf
 from typing import Dict, Iterator, Literal, Optional, Set, Tuple, Union
 
-from pysam import AlignedSegment, AlignmentFile, FastaFile, VariantFile  # pylint: disable=no-name-in-module
+from pysam import AlignedSegment  # pylint: disable=no-name-in-module
+from pysam import AlignmentFile, FastaFile, VariantFile
 
 
 class SequenceDict:
@@ -268,9 +269,11 @@ class NumericRange:
     def __contains__(self, elem: NRElement) -> bool:
         return self.start <= elem and elem <= self.end
 
-    def __len__(self) -> NRElement:
-        if self.start == -inf or self.end == inf:
-            return inf
+    def __len__(self) -> int:
+        # Float type is only used to store infinify. We check for the type so
+        # the type checker knows that these variables are not integers
+        if isinstance(self.start, float) or isinstance(self.end, float):
+            raise ValueError('Infinite value length')
 
         return self.end - self.start + 1
 
