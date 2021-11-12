@@ -681,3 +681,7 @@ class TestNumericRangeSet(unittest.TestCase):
         self.assertFalse(19 in self.nrs)
         self.assertFalse(31 in self.nrs)
         self.assertFalse(35 in self.nrs)
+
+
+if __name__ == '__main__':
+    unittest.main()
