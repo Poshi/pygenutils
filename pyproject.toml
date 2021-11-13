@@ -8,3 +8,10 @@ build-backend = "setuptools.build_meta"
 [tool.coverage.run]
 debug = []
 branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+]
