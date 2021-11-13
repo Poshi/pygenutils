@@ -142,8 +142,8 @@ class NumericRange:
 
         if self.start == other.start:
             return self.end < other.end
-        else:
-            return self.start < other.start
+
+        return self.start < other.start
 
     def isdisjoint(self, other) -> bool:
         '''Are the two intervals disjoint?
@@ -239,13 +239,14 @@ class NumericRange:
 
         if other.start <= self.start:
             return {self.__class__(other.end + 1, self.end)}
-        elif other.end >= self.end:
+
+        if other.end >= self.end:
             return {self.__class__(self.start, other.start - 1)}
-        else:
-            return {
-                self.__class__(self.start, other.start - 1),
-                self.__class__(other.end + 1, self.end),
-            }
+
+        return {
+            self.__class__(self.start, other.start - 1),
+            self.__class__(other.end + 1, self.end),
+        }
 
     def __xor__(self, other) -> Set['NumericRange']:
         if not isinstance(other, self.__class__):
@@ -267,7 +268,7 @@ class NumericRange:
         return {(self - shared).pop(), (other - shared).pop()}
 
     def __contains__(self, elem: NRElement) -> bool:
-        return self.start <= elem and elem <= self.end
+        return self.start <= elem <= self.end
 
     def __len__(self) -> int:
         # Float type is only used to store infinify. We check for the type so
@@ -389,6 +390,7 @@ class NumericRangeSet:
 
     def __repr__(self) -> str:
         nrs = ", ".join([repr(nr) for nr in self.ranges])
+
         return f'{self.__class__.__name__}([{nrs}])'
 
 
