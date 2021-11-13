@@ -5,7 +5,90 @@
 
 import unittest
 
-from pygenutils import NumericRange, NumericRangeSet
+from pysam import AlignmentFile, VariantFile  # pylint: disable=no-name-in-module
+from pygenutils import NumericRange, NumericRangeSet, SequenceDict
+
+
+class TestSequenceDict(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.fasta = 'tests/data/test1.fasta'
+        self.bam = 'tests/data/test.bam'
+        self.vcf = 'tests/data/test.MT.g.vcf'
+
+    def test_contructor(self) -> None:
+        sd = SequenceDict()
+
+        self.assertEqual(sd.seq_dict, {})
+
+    def test_from_fasta(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+
+        self.assertEqual(sd.seq_dict,
+                         {
+                             'chr1': 4,
+                             'chr2': 8,
+                             'chr3': 12,
+                             'chr4': 16,
+                         })
+
+    def test_from_bam_filename(self) -> None:
+        sd = SequenceDict.from_bam(self.bam)
+
+        self.assertEqual(len(sd.seq_dict), 86)
+        self.assertEqual(sum(sd.seq_dict.values()), 3137454505)
+
+    def test_from_bam_file(self) -> None:
+        with AlignmentFile(self.bam, 'rb') as bam:
+            sd = SequenceDict.from_bam(bam)
+
+        self.assertEqual(len(sd.seq_dict), 86)
+        self.assertEqual(sum(sd.seq_dict.values()), 3137454505)
+
+    def test_from_bcf_filename(self) -> None:
+        sd = SequenceDict.from_bcf(self.vcf)
+
+        self.assertEqual(len(sd.seq_dict), 86)
+        self.assertEqual(sum(sd.seq_dict.values()), 3137454505)
+
+    def test_from_bcf_file(self) -> None:
+        with VariantFile(self.vcf, 'r') as vcf:
+            sd = SequenceDict.from_bcf(vcf)
+
+        self.assertEqual(len(sd.seq_dict), 86)
+        self.assertEqual(sum(sd.seq_dict.values()), 3137454505)
+
+    def test_getitem(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+
+        self.assertEqual(sd['chr2'], 8)
+
+    def test_contains(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+
+        self.assertTrue('chr2' in sd)
+
+    def test_not_contains(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+
+        self.assertFalse('chrN' in sd)
+
+    def test_len_fasta(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+
+        self.assertEqual(len(sd), 4)
+
+    def test_len_bam(self) -> None:
+        sd = SequenceDict.from_bam(self.bam)
+
+        self.assertEqual(len(sd), 86)
+
+    def test_iter(self) -> None:
+        sd = SequenceDict.from_fasta(self.fasta)
+        contents = {f'chr{n + 1}' for n in range(4)}
+        for chrom in sd:
+            self.assertTrue(chrom in contents)
 
 
 class TestNumericRange(unittest.TestCase):
@@ -681,7 +764,3 @@ class TestNumericRangeSet(unittest.TestCase):
         self.assertFalse(19 in self.nrs)
         self.assertFalse(31 in self.nrs)
         self.assertFalse(35 in self.nrs)
-
-
-if __name__ == '__main__':
-    unittest.main()
