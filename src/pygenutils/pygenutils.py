@@ -7,8 +7,7 @@ from functools import reduce, total_ordering
 from math import inf
 from typing import Dict, Iterator, Literal, Optional, Set, Tuple, Union
 
-from pysam import AlignedSegment  # pylint: disable=no-name-in-module
-from pysam import AlignmentFile, FastaFile, VariantFile
+from pysam import AlignedSegment, AlignmentFile, FastaFile, VariantFile  # pylint: disable=no-name-in-module
 
 
 class SequenceDict:
@@ -61,7 +60,7 @@ class SequenceDict:
         if isinstance(bcf, VariantFile):
             contigs = bcf.header.contigs
         else:
-            with AlignmentFile(bcf) as fin:
+            with VariantFile(bcf) as fin:
                 contigs = fin.header.contigs
 
         result.seq_dict = {e.name: e.length for e in contigs.values()}
